@@ -18,7 +18,7 @@ export const removeToken = () => {
 /**
  * Core HTTP Request Wrapper
  */
-async function apiRequest(endpoint, options = {}) {
+async function apiRequest(endpoint, options = {}, isRetry = false) {
   const url = `${API_BASE_URL}${endpoint}`
   const token = getToken()
 
@@ -66,7 +66,11 @@ async function apiRequest(endpoint, options = {}) {
 
     return data
   } catch (err) {
-    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+    if (err.name === 'TypeError' && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))) {
+      if (!isRetry) {
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+        return apiRequest(endpoint, options, true)
+      }
       const connError = new Error('Cannot connect to backend service. Please verify FastAPI backend is running.')
       connError.status = 503
       throw connError
