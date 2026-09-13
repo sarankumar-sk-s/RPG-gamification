@@ -28,12 +28,19 @@ import { inventoryApi } from '../services/api'
 import panoramaBg from '../assets/rpg_panorama_bg.jpg'
 import { initialInventoryItems } from '../data/mockShopData'
 import { initialPlayerData } from '../data/mockDashboardData'
+import { getCurrentStreak } from '../utils/streakManager'
 
 export function Inventory() {
   const navigate = useNavigate()
   const { user, character, isAuthenticated } = useAuth()
   const [player, setPlayer] = useState(initialPlayerData)
-  const [inventory, setInventory] = useState(initialInventoryItems)
+  const [inventory, setInventory] = useState(() => {
+    try {
+      const saved = localStorage.getItem('life_rpg_vault_inventory')
+      if (saved) return JSON.parse(saved)
+    } catch (e) {}
+    return initialInventoryItems
+  })
   const [activeTab, setActiveTab] = useState('ALL')
   const [toastMessage, setToastMessage] = useState(null)
   const [activeBuffs, setActiveBuffs] = useState([])
@@ -45,15 +52,31 @@ export function Inventory() {
     }, 3500)
   }
 
-  // Sync Live Character Stats
+  // Sync Live Character Stats & Persistent State
   React.useEffect(() => {
-    if (character) {
-      setPlayer((prev) => ({
-        ...prev,
-        gold: character.gold ?? prev.gold,
-        level: character.level ?? prev.level
-      }))
-    }
+    const currentStreak = character?.streak || getCurrentStreak()
+    const storedGold = localStorage.getItem('life_rpg_player_gold')
+    const storedXP = localStorage.getItem('life_rpg_player_xp')
+
+    const effectiveGold = storedGold !== null
+      ? parseInt(storedGold, 10)
+      : Math.max(character?.gold ?? 0, 350)
+
+    const effectiveXP = storedXP !== null
+      ? parseInt(storedXP, 10)
+      : (character?.xp || 0)
+
+    const charLevel = character?.level || 1
+    const charReq = character?.xp_required || (charLevel * 100)
+
+    setPlayer((prev) => ({
+      ...prev,
+      gold: effectiveGold,
+      level: charLevel,
+      currentXP: effectiveXP,
+      xpRequired: charReq,
+      streak: currentStreak
+    }))
   }, [character])
 
   // Fetch live inventory from backend
@@ -62,7 +85,7 @@ export function Inventory() {
       inventoryApi.getInventory()
         .then((items) => {
           if (items && items.length > 0) {
-            setInventory(items.map((inv) => ({
+            const mapped = items.map((inv) => ({
               id: inv.id,
               shopId: inv.item_id,
               name: inv.item?.name || 'Vault Item',
@@ -76,7 +99,9 @@ export function Inventory() {
               description: inv.item?.description || 'Stored in Citadel Vault.',
               canUse: true,
               isEquipped: false
-            })))
+            }))
+            setInventory(mapped)
+            localStorage.setItem('life_rpg_vault_inventory', JSON.stringify(mapped))
           }
         })
         .catch(() => {})
@@ -88,10 +113,28 @@ export function Inventory() {
     const item = inventory.find((i) => i.id === itemId)
     if (!item || item.quantity <= 0) return
 
-    // Apply item effect
+    // Apply item effect & award XP if booster
     if (item.name.includes('XP BOOST')) {
+      const xpGained = 50
+      const newXP = player.currentXP + xpGained
+      let newLevel = player.level
+      let newReq = player.xpRequired
+
+      if (newXP >= newReq) {
+        newLevel += 1
+        newReq = newLevel * 100
+        triggerToast(`🎉 LEVEL UP! You reached Level ${newLevel}!`)
+      }
+      localStorage.setItem('life_rpg_player_xp', String(newXP))
+      setPlayer((prev) => ({
+        ...prev,
+        currentXP: newXP,
+        level: newLevel,
+        xpRequired: newReq
+      }))
+
       setActiveBuffs((prev) => [...prev, 'XP Boost +50% Active (3 Quests)'])
-      triggerToast(`⚡ Activated XP BOOST! +50% XP will apply to your next 3 quests.`)
+      triggerToast(`⚡ Activated XP BOOST! +50 XP awarded directly!`)
     } else if (item.name.includes('FOCUS POTION')) {
       setActiveBuffs((prev) => [...prev, 'Focus Potion Active (2 Hours)'])
       triggerToast(`🧪 Consumed FOCUS POTION! Wisdom flow-state enabled for 2 hours.`)
@@ -102,9 +145,9 @@ export function Inventory() {
       triggerToast(`Used ${item.name}!`)
     }
 
-    // Decrement quantity
-    setInventory((prev) =>
-      prev
+    // Decrement quantity and persist
+    setInventory((prev) => {
+      const updated = prev
         .map((inv) => {
           if (inv.id === itemId) {
             return { ...inv, quantity: inv.quantity - 1 }
@@ -112,7 +155,9 @@ export function Inventory() {
           return inv
         })
         .filter((inv) => inv.quantity > 0 || !inv.canUse)
-    )
+      localStorage.setItem('life_rpg_vault_inventory', JSON.stringify(updated))
+      return updated
+    })
   }
 
   const getItemIcon = (iconName) => {
