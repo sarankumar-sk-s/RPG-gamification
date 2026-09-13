@@ -2,7 +2,17 @@
  * Centralized API Client for Life RPG Backend (FastAPI)
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'https://rpg-gamification-4.onrender.com'
+// Base URL Configuration (Sanitized & Upgraded for Production)
+const getBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'https://rpg-gamification-4.onrender.com'
+  let cleanUrl = envUrl.trim().replace(/\/+$/, '')
+  if (cleanUrl.startsWith('http://') && !cleanUrl.includes('localhost') && !cleanUrl.includes('127.0.0.1')) {
+    cleanUrl = cleanUrl.replace('http://', 'https://')
+  }
+  return cleanUrl
+}
+
+const API_BASE_URL = getBaseUrl()
 
 // Token Management
 export const TOKEN_KEY = 'life_rpg_auth_token'
@@ -19,7 +29,8 @@ export const removeToken = () => {
  * Core HTTP Request Wrapper
  */
 async function apiRequest(endpoint, options = {}, isRetry = false) {
-  const url = `${API_BASE_URL}${endpoint}`
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const url = `${API_BASE_URL}${cleanEndpoint}`
   const token = getToken()
 
   const headers = {
@@ -48,7 +59,7 @@ async function apiRequest(endpoint, options = {}, isRetry = false) {
     const data = await response.json().catch(() => null)
 
     if (!response.ok) {
-      let errorMessage = 'An error occurred during request.'
+      let errorMessage = `HTTP ${response.status}`
       if (data?.detail) {
         if (typeof data.detail === 'string') {
           errorMessage = data.detail
@@ -57,6 +68,8 @@ async function apiRequest(endpoint, options = {}, isRetry = false) {
         } else {
           errorMessage = JSON.stringify(data.detail)
         }
+      } else if (response.statusText) {
+        errorMessage = response.statusText
       }
       const error = new Error(errorMessage)
       error.status = response.status
@@ -66,6 +79,7 @@ async function apiRequest(endpoint, options = {}, isRetry = false) {
 
     return data
   } catch (err) {
+    // Distinguish real network failure from HTTP response errors
     if (err.name === 'TypeError' && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))) {
       if (!isRetry) {
         await new Promise((resolve) => setTimeout(resolve, 1500))
