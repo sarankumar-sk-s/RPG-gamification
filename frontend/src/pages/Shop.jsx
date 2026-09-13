@@ -70,19 +70,16 @@ export function Shop() {
     const storedGold = localStorage.getItem('life_rpg_player_gold')
     const storedXP = localStorage.getItem('life_rpg_player_xp')
 
-    // Guarantee player has sufficient funds to purchase items (at least 350 Gold)
-    let effectiveGold = 350
-    if (storedGold !== null) {
-      effectiveGold = parseInt(storedGold, 10)
-    } else if (character && typeof character.gold === 'number' && character.gold > 0) {
+    let effectiveGold = 100
+    if (character && typeof character.gold === 'number') {
       effectiveGold = character.gold
-    } else {
-      localStorage.setItem('life_rpg_player_gold', String(effectiveGold))
+    } else if (storedGold !== null) {
+      effectiveGold = parseInt(storedGold, 10)
     }
 
-    const effectiveXP = storedXP !== null
-      ? parseInt(storedXP, 10)
-      : (character?.xp || 0)
+    const effectiveXP = (character && typeof character.xp === 'number')
+      ? character.xp
+      : (storedXP !== null ? parseInt(storedXP, 10) : 0)
 
     const charLevel = character?.level || 1
     const charReq = character?.xp_required || (charLevel * 100)

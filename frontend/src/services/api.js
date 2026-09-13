@@ -2,7 +2,7 @@
  * Centralized API Client for Life RPG Backend (FastAPI)
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'https://rpg-gamification-4.onrender.com'
 
 // Token Management
 export const TOKEN_KEY = 'life_rpg_auth_token'

@@ -58,13 +58,16 @@ export function Inventory() {
     const storedGold = localStorage.getItem('life_rpg_player_gold')
     const storedXP = localStorage.getItem('life_rpg_player_xp')
 
-    const effectiveGold = storedGold !== null
-      ? parseInt(storedGold, 10)
-      : Math.max(character?.gold ?? 0, 350)
+    let effectiveGold = 100
+    if (character && typeof character.gold === 'number') {
+      effectiveGold = character.gold
+    } else if (storedGold !== null) {
+      effectiveGold = parseInt(storedGold, 10)
+    }
 
-    const effectiveXP = storedXP !== null
-      ? parseInt(storedXP, 10)
-      : (character?.xp || 0)
+    const effectiveXP = (character && typeof character.xp === 'number')
+      ? character.xp
+      : (storedXP !== null ? parseInt(storedXP, 10) : 0)
 
     const charLevel = character?.level || 1
     const charReq = character?.xp_required || (charLevel * 100)
